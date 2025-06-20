@@ -2,15 +2,8 @@ import os
 import logging
 from flask import Flask, request, jsonify
 from telegram import Update
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    filters,
-    ContextTypes
-)
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# Initialize Flask
 app = Flask(__name__)
 
 # Configure logging
@@ -20,13 +13,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize Telegram bot
+# Initialize bot
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-application = Application.builder().token(TOKEN).build()
+SECRET_TOKEN = os.getenv('WEBHOOK_SECRET_TOKEN')
+
+try:
+    application = Application.builder().token(TOKEN).build()
+except Exception as e:
+    logger.error(f"Failed to initialize bot: {e}")
+    raise
 
 # Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text('Hello! I received your /start command.')
+    await update.message.reply_text('Hello! Bot is working.')
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f'You said: {update.message.text}')
@@ -35,20 +34,25 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
 
-# Webhook endpoint
 @app.route('/webhook', methods=['POST'])
 async def webhook():
-    if request.headers.get('X-Telegram-Bot-Api-Secret-Token') != os.getenv('WEBHOOK_SECRET_TOKEN'):
+    # Verify secret token
+    if request.headers.get('X-Telegram-Bot-Api-Secret-Token') != SECRET_TOKEN:
+        logger.warning("Invalid secret token received")
         return 'Unauthorized', 401
     
     try:
+        logger.info("Received webhook request")
         json_data = request.get_json()
+        logger.debug(f"Raw update: {json_data}")
+        
         update = Update.de_json(json_data, application.bot)
         await application.process_update(update)
         return 'OK', 200
+        
     except Exception as e:
-        logger.error(f"Error processing update: {e}")
-        return 'Error', 500
+        logger.error(f"Error processing update: {e}", exc_info=True)
+        return 'Internal Server Error', 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 10000)))
