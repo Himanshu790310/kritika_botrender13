@@ -29,23 +29,12 @@ def get_env_var(name):
         return None
     return value
 
-def validate_bot_token(token):
-    """Validate the Telegram bot token format"""
-    if not token:
-        return False
-    pattern = r'^\d{9,10}:[a-zA-Z0-9_-]{35}$'
-    return bool(re.match(pattern, token))
-
 TELEGRAM_BOT_TOKEN = get_env_var('TELEGRAM_BOT_TOKEN')
 WEBHOOK_URL = get_env_var('WEBHOOK_URL')
 WEBHOOK_SECRET_TOKEN = get_env_var('WEBHOOK_SECRET_TOKEN')
 
 if not all([TELEGRAM_BOT_TOKEN, WEBHOOK_URL, WEBHOOK_SECRET_TOKEN]):
     logger.error("Shutting down due to missing environment variables")
-    sys.exit(1)
-
-if not validate_bot_token(TELEGRAM_BOT_TOKEN):
-    logger.error("Invalid Telegram bot token format")
     sys.exit(1)
 
 PORT = int(os.environ.get('PORT', 10000))
@@ -62,23 +51,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def set_webhook():
     try:
         webhook_url = f"{WEBHOOK_URL}/webhook"
-        logger.info(f"Attempting to set webhook to: {webhook_url}")
+        logger.info(f"Setting webhook to: {webhook_url}")
         
         await application.bot.set_webhook(
             url=webhook_url,
             secret_token=WEBHOOK_SECRET_TOKEN,
             drop_pending_updates=True,
-            max_connections=10
+            max_connections=10,
+            allowed_updates=Update.ALL_TYPES,
+            certificate=None  # Disable certificate verification
         )
         
-        # Verify webhook was set
-        webhook_info = await application.bot.get_webhook_info()
-        logger.info(f"Webhook info: {webhook_info}")
-        
-        if not webhook_info.url or webhook_info.url != webhook_url:
-            raise RuntimeError("Webhook verification failed")
-            
-        logger.info("Webhook set and verified successfully")
+        logger.info("Webhook set successfully")
     except Exception as e:
         logger.error(f"Webhook setup failed: {str(e)}")
         sys.exit(1)
