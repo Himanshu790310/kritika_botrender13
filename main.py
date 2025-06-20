@@ -1,61 +1,31 @@
 import os
-import logging
+from fastapi import FastAPI, Request, Header, HTTPException
+import httpx
 import asyncio
-from flask import Flask, request
-from telegram import Update
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    filters,
-    ContextTypes,
-)
 
-app = Flask(__name__)
+app = FastAPI()
 
-# Configure logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+SECRET_TOKEN = os.getenv("TELEGRAM_SECRET_TOKEN", "set-this-to-a-random-string")
 
-# Initialize bot
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-SECRET_TOKEN = "yrytdrxdDYsrRfYDDEYFEDCTtddtyedfdssDTSXddyYTFyfedtyd5ft"  # Your secret token
+TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
-# Initialize application
-application = Application.builder().token(TOKEN).build()
+@app.post("/webhook")
+async def telegram_webhook(
+    request: Request,
+    x_telegram_bot_api_secret_token: str = Header(None)
+):
+    if x_telegram_bot_api_secret_token != SECRET_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid secret token.")
 
-# --- Ensure Application is fully initialized ---
-asyncio.run(application.initialize())
-# -----------------------------------------------
-
-# Handlers
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🚀 Bot is working! Send me a message.")
-
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"🔁 You said: {update.message.text}")
-
-# Register handlers
-application.add_handler(CommandHandler("start", start))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
-
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    # Verify secret token
-    if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != SECRET_TOKEN:
-        logger.warning("⚠️ Invalid secret token")
-        return "Unauthorized", 401
-
-    try:
-        update = Update.de_json(request.get_json(), application.bot)
-        asyncio.run(application.process_update(update))
-        return "OK", 200
-    except Exception as e:
-        logger.error(f"❌ Error: {str(e)}")
-        return "Error", 500
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
+    data = await request.json()
+    chat_id = data.get("message", {}).get("chat", {}).get("id")
+    text = data.get("message", {}).get("text")
+    if chat_id and text:
+        reply = f"You said: {text}"
+        async with httpx.AsyncClient() as client:
+            await client.post(f"{TELEGRAM_API}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": reply
+            })
+    return {"ok": True}
