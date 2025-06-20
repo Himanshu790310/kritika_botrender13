@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from flask import Flask, request
 from telegram import Update
 from telegram.ext import (
@@ -38,7 +39,7 @@ application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
 
 @app.route("/webhook", methods=["POST"])
-async def webhook():
+def webhook():
     # Verify secret token
     if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != SECRET_TOKEN:
         logger.warning("⚠️ Invalid secret token")
@@ -46,7 +47,7 @@ async def webhook():
 
     try:
         update = Update.de_json(request.get_json(), application.bot)
-        await application.process_update(update)
+        asyncio.run(application.process_update(update))
         return "OK", 200
     except Exception as e:
         logger.error(f"❌ Error: {str(e)}")
