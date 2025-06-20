@@ -27,6 +27,10 @@ SECRET_TOKEN = "yrytdrxdDYsrRfYDDEYFEDCTtddtyedfdssDTSXddyYTFyfedtyd5ft"  # Your
 # Initialize application
 application = Application.builder().token(TOKEN).build()
 
+# --- Ensure Application is fully initialized ---
+asyncio.run(application.initialize())
+# -----------------------------------------------
+
 # Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🚀 Bot is working! Send me a message.")
